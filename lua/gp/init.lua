@@ -5,6 +5,7 @@
 -- Module structure
 --------------------------------------------------------------------------------
 local config = require("gp.config")
+local include = require("gp.include")
 
 local M = {
 	_Name = "Gp", -- plugin name
@@ -1065,9 +1066,11 @@ M.chat_respond = function(params)
 		messages[1] = { role = "system", content = content }
 	end
 
-	-- strip whitespace from ends of content
 	for _, message in ipairs(messages) do
+		-- strip whitespace from ends of content
 		message.content = message.content:gsub("^%s*(.-)%s*$", "%1")
+		-- process includes from "@" commands
+		message.content = include.process_includes(message.content)
 	end
 
 	-- write assistant prompt
@@ -1485,7 +1488,6 @@ end
 --------------------------------------------------------------------------------
 -- Prompt logic
 --------------------------------------------------------------------------------
-
 M.cmd.Agent = function(params)
 	local agent_name = string.gsub(params.args, "^%s*(.-)%s*$", "%1")
 	if agent_name == "" then
@@ -1608,7 +1610,7 @@ M.repo_instructions = function()
 	end
 
 	local lines = vim.fn.readfile(instruct_file)
-	return table.concat(lines, "\n")
+	return include.process_includes(table.concat(lines, "\n"))
 end
 
 M.prep_context = function(buf, file_name)
@@ -1825,12 +1827,13 @@ M.Prompt = function(params, target, agent, template, prompt, whisper, callback)
 
 		local sys_prompt = M.render.prompt_template(agent.system_prompt, command, selection, filetype, filename)
 		sys_prompt = sys_prompt or ""
-		table.insert(messages, { role = "system", content = sys_prompt })
 
 		local repo_instructions = M.repo_instructions()
 		if repo_instructions ~= "" then
-			table.insert(messages, { role = "system", content = repo_instructions })
+			sys_prompt = sys_prompt .. "\n\n"..repo_instructions
 		end
+
+		table.insert(messages, { role = "system", content = sys_prompt })
 
 		local user_prompt = M.render.prompt_template(template, command, selection, filetype, filename)
 		table.insert(messages, { role = "user", content = user_prompt })
@@ -1952,13 +1955,24 @@ M.Prompt = function(params, target, agent, template, prompt, whisper, callback)
 			return
 		end
 
-		-- if prompt is provided, ask the user to enter the command
-		vim.ui.input({ prompt = prompt, default = whisper }, function(input)
+		local function input_callback(input)
 			if not input or input == "" then
 				return
 			end
 			cb(input)
-		end)
+		end
+
+		-- if prompt is provided, ask the user to enter the command
+		if M.config.command_floating_window then
+			M.helpers.floating_input({
+				prompt = prompt,
+				default = whisper,
+				accept_shortcut = M.config.chat_shortcut_respond.shortcut,
+				accept_modes = M.config.chat_shortcut_respond.modes
+			}, input_callback)
+		else
+			vim.ui.input({ prompt = prompt, default = whisper }, input_callback)
+		end
 	end)
 end
 
