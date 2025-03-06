@@ -204,6 +204,7 @@ D.prepare_payload = function(messages, model, provider)
 
 		-- Add thinking capability for claude-3.7-sonnet-thought
 		if model.model:find("thought") then
+			payload.max_tokens = 20000
 			payload.thinking = {
 				type = "enabled",
 				budget_tokens = 16000
