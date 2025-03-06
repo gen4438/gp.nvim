@@ -180,6 +180,40 @@ D.prepare_payload = function(messages, model, provider)
 		return payload
 	end
 
+	if provider == "copilot" and model.model:find("claude") then
+		local system = ""
+		local i = 1
+		while i < #messages do
+			if messages[i].role == "system" then
+				system = system .. messages[i].content .. "\n"
+				table.remove(messages, i)
+			else
+				i = i + 1
+			end
+		end
+
+		local payload = {
+			model = model.model,
+			stream = true,
+			messages = messages,
+			system = system,
+			max_tokens = model.max_tokens or 4096,
+			temperature = math.max(0, math.min(2, model.temperature or 1)),
+			top_p = math.max(0, math.min(1, model.top_p or 1)),
+		}
+
+		-- Add thinking capability for claude-3.7-sonnet-thought
+		if model.model:find("thought") then
+			payload.thinking = {
+				type = "enabled",
+				budget_tokens = 16000
+			}
+		end
+
+		return payload
+	end
+
+
 	if provider == "copilot" and model.model == "gpt-4o" then
 		model.model = "gpt-4o-2024-05-13"
 	end
@@ -415,7 +449,7 @@ local query = function(buf, provider, payload, handler, on_exit, callback)
 	end
 
 	local temp_file = D.query_dir ..
-		"/" .. logger.now() .. "." .. string.format("%x", math.random(0, 0xFFFFFF)) .. ".json"
+					"/" .. logger.now() .. "." .. string.format("%x", math.random(0, 0xFFFFFF)) .. ".json"
 	helpers.table_to_file(payload, temp_file)
 
 	local curl_params = vim.deepcopy(D.config.curl_params or {})
