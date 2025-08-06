@@ -282,12 +282,18 @@ M.setup = function(opts)
 		callback = function(ev)
 			M.helpers.schedule(function()
 				local buf = ev.buf
+				local path = ev.file
+				
+				-- Skip non-file buffers (e.g., fugitive://, terminal, etc.)
+				if not path or path == "" or path:match("^%w+://") then
+					return
+				end
+				
 				local current_ft = vim.bo[buf].filetype
 
 				if current_ft == "markdown.gpchat" then
 					vim.cmd("doautocmd User GpRefresh")
 				elseif current_ft ~= "markdown.gpmd" then
-					local path = ev.file
 					if M.helpers.ends_with(path, ".gp.md") then
 						vim.bo[buf].filetype = "markdown.gpmd"
 					elseif M.not_chat(buf, path) == nil then
@@ -302,6 +308,13 @@ M.setup = function(opts)
 	vim.api.nvim_create_autocmd("BufEnter", {
 		callback = function(ev)
 			local buf = ev.buf
+			local filename = vim.api.nvim_buf_get_name(buf)
+			
+			-- Skip non-file buffers (e.g., fugitive://, terminal, etc.)
+			if filename:match("^%w+://") then
+				return
+			end
+			
 			local context_dir = M.buffer_state.get_key(buf, "context_dir")
 			context_dir = context_dir or M.helpers.find_git_root()
 			if context_dir == "" then
@@ -314,7 +327,6 @@ M.setup = function(opts)
 				M.buffer_state.set(buf, "context_dir", full_path)
 			end
 
-			local filename = vim.api.nvim_buf_get_name(buf)
 			M.buffer_state.set(buf, "is_chat", M.not_chat(buf, filename) == nil)
 		end,
 	})
@@ -569,6 +581,11 @@ end
 ---@param file_name string # file name
 ---@return string | nil # reason for not being a chat or nil if it is a chat
 M.not_chat = function(buf, file_name)
+	-- Skip non-file buffers (e.g., fugitive://, terminal, etc.)
+	if not file_name or file_name == "" or file_name:match("^%w+://") then
+		return "not a file buffer"
+	end
+	
 	file_name = vim.fn.resolve(file_name)
 	local chat_dir = vim.fn.resolve(M.config.chat_dir)
 

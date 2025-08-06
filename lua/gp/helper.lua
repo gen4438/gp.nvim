@@ -184,7 +184,20 @@ end
 _H.find_git_root = function(path)
 	logger.debug("finding git root for path: " .. vim.inspect(path))
 	local cwd = vim.fn.expand("%:p:h")
+	
+	-- Skip if current buffer is a special buffer (e.g., fugitive://)
+	local current_buf_name = vim.fn.expand("%:p")
+	if current_buf_name:match("^%w+://") then
+		logger.debug("skipping git root search for special buffer: " .. current_buf_name)
+		return ""
+	end
+	
 	if path then
+		-- Skip if provided path is a special buffer
+		if path:match("^%w+://") then
+			logger.debug("skipping git root search for special path: " .. path)
+			return ""
+		end
 		cwd = vim.fn.fnamemodify(path, ":p:h")
 	end
 
